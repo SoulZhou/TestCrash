@@ -1,0 +1,285 @@
+/**
+ * 生成依赖配置文件dependon.cfg
+ * @param nxosLibs ，是config.gradle中的nxos_dependon_libs集合
+ */
+def generateDependonCfg(nxosLibs) {
+    def dependon = file('app/src/main/assets/dependon.cfg')
+    //做删除处理，是认为依赖关系只和本应用的逻辑层有关系
+    if (dependon.exists()) {
+        dependon.delete()
+    }
+
+    def dependonList = getSdkInfos(nxosLibs)
+    //依赖列表大小为0时，表示没有依赖SDK，后面不用处理了
+    if (dependonList.size() == 0) {
+        println("list is null")
+        return
+    }
+
+    println("start create cfg dir")
+    def assets = file('app/src/main/assets')
+    println("assets path:" + assets.getAbsolutePath())
+    if (!assets.exists()) {
+        println(assets.mkdir())
+    }
+    println('dependon path:' + dependon.getAbsolutePath())
+    def printWriter = dependon.newPrintWriter()
+    dependonList.each {
+        printWriter.write(it)
+        printWriter.write('\n')
+    }
+    printWriter.flush()
+    printWriter.close()
+}
+
+/**
+ * 云智有依赖关系的SDK的名字规则：appName_appPackageName_sdkVersion.jar 或 ‘appPackageName:appName:sdkVersion’,
+ * sdkVersion以s开头，如果没有sdkVersion，不用加入依赖配置文件
+ * @param nxosLibs , 是config.gradle中的nxos_dependon_libs集合
+ * @return 应用依赖关系集合
+ */
+def getSdkInfos(nxosLibs) {
+    def dependonList = []
+    nxosLibs.each { entry ->
+        println('entry:' + entry)
+        entry.value.each { subEntry ->
+            println('subEntry:' + subEntry)
+            for (i in subEntry.value) {
+                println("in getSdkInfos,it:" + i)
+                def sdkVersion = ''
+                def appName = ''
+                def appPkgName = ''
+                if (i.contains('/') && !i.contains(':')) {
+                    def split = i.split('/')
+                    //sdkName在/线后面，见config.gradle中的nxos_dependon_libs变量
+                    def sdkName = split[split.length - 1]
+                    println('fileName:' + sdkName)
+                    //见方法的注释，所有项以下划线为分隔符，SDK版本号有的话都是放在最后一项，并以小写s开头
+                    sdkName = sdkName.substring(0, sdkName.lastIndexOf("."))
+                    println('fileName2:' + sdkName)
+                    def sdkNameSplit = sdkName.split('_')
+                    def len = sdkNameSplit.length
+                    //如果解析出来不等于三项,可以确定没有SDK版本号
+                    if (len != 3) {
+                        continue
+                    }
+                    sdkVersion = sdkNameSplit[len - 1]
+                    //SDK版本号以小写s开头
+                    if (!sdkVersion.startsWith('s')) {
+                        println('sdk version is not start with s')
+                        continue
+                    }
+                    appName = sdkNameSplit[0]
+                    appPkgName = sdkNameSplit[1]
+                } else {
+                    def split = i.split(':')
+                    def len = split.length
+                    if (len != 3) {
+                        continue
+                    }
+                    sdkVersion = split[len - 1]
+                    //SDK版本号以小写s开头
+                    if (!sdkVersion.startsWith('s')) {
+                        println('sdk version is not start with s')
+                        continue
+                    }
+                    appName = split[1]
+                    appPkgName = split[0]
+                }
+                dependonList.add(appName + '=' + appPkgName + '_' + sdkVersion)
+            }
+        }
+    }
+    return dependonList
+}
+
+/**
+ * 获取当前编译的渠道
+ * @return 当前编译渠道号
+ */
+def getChannel() {
+    def parameter = gradle.getStartParameter()
+    if (parameter != null) {
+        def tasks = parameter.getTaskRequests()
+        if (tasks != null && tasks.size() > 0) {
+            def args = tasks[0].getArgs()
+            if (args != null) {
+                if (args[0] != null) {
+                    return args[0].toLowerCase().replace("assemble", "").replace("release", "").replace("debug", "")
+                }
+            }
+        }
+    }
+    return null
+}
+
+/**
+ * 获取当前渠道配置的framework.jar的路径
+ * @param productVersion 渠道配置 在config.gradle中配置
+ * @param chanel 当前编译渠道
+ * @return 当前framework.jar的路径
+ */
+def getFramework(productVersion, chanel) {
+    if (chanel != null) {
+        def chanelconfig = productVersion.get(chanel)
+        if (chanelconfig != null) {
+            return chanelconfig.framework
+        }
+    }
+    return null
+}
+
+/**
+ * 统计版本号，包括主版本号和渠道版本号
+ * 格式：已version_start开始，已version_end结束
+ * 内容：主版本号为：main_version=xxx；驱动渠道版本号为：渠道号=xxx
+ * 主要是提供jenkins使用，方便统计哪个版本号有变化
+ */
+task getProductVersion << {
+    def main_version = rootProject.ext.main_version
+    def product_version
+    if (rootProject.ext['product_version'] != null) {
+        println("has product_version")
+        product_version = rootProject.ext.product_version
+    } else {
+        println("no product_version")
+    }
+    println('version_start')
+    println('main_version=' + main_version.versionCode)
+    if (product_version != null) {
+        for (def productInfo : product_version) {
+            println(productInfo.key + '=' + productInfo.value.version)
+        }
+    }
+    println('version_end')
+}
+
+/**
+ * 执行命令行,例如：execCmds('git','rev-parse','--short','HEAD')
+ * @param cmds 可变数组
+ * @return
+ */
+def execCmds(String[] cmds) {
+    def result = ""
+    try {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine cmds
+            standardOutput = stdout
+        }
+        result = stdout.toString()
+        stdout.close()
+    } catch (Exception e) {
+        e.printStackTrace()
+    }
+    return result
+}
+
+/**
+ * 获取当前项目git的commitid，本地可能不是最新的，提交后在jenkins上编译是最新的
+ * git rev-parse --short HEAD，获取短commit-id
+ */
+def getCurrentCommitId() {
+    def gitFolder = file('.git')
+    if (!gitFolder.exists()) {
+        return ''
+    }
+
+    def commitId = execCmds('git', 'rev-parse', '--short', 'HEAD')
+    println('commitId:' + commitId)
+    return commitId.trim()
+}
+
+/**
+ * 测试任务
+ */
+task getCommitId << {
+    getCurrentCommitId()
+}
+
+/**
+ * 获取渠道名字
+ * @param it
+ * @return
+ */
+def getProductName(it) {
+    def productName
+    if (it.productFlavors != null && it.productFlavors.size() > 0) {
+        productName = it.productFlavors[0].name
+        if (rootProject.hasProperty('PRODUCT_NAME')) {
+            productName = PRODUCT_NAME
+        }
+    }
+    return productName
+}
+
+/**
+ * 获取渠道版本号
+ * @param it
+ * @param appVersionName
+ * @return
+ */
+def getProductVersionName(it, appVersionName) {
+    def productVersionName
+    if (it.productFlavors != null && it.productFlavors.size() > 0) {
+        productVersionName = it.productFlavors[0].versionName
+    } else {
+        productVersionName = appVersionName
+    }
+    return productVersionName
+}
+
+/**
+ * 配置apk输出路径和名称
+ * @param it
+ * @return
+ */
+def setApkPathAndName(variant, appVersionName) {
+    def buildType = variant.buildType.name
+    def projectName = rootProject.name
+    def fileName
+    def productName = getProductName(variant)
+
+    def productVersionName = getProductVersionName(variant, appVersionName)
+
+    def createTime = new Date().format("YYYY.MM.dd-HH.mm.ss", TimeZone.getTimeZone("GMT+08:00"))
+    if (rootProject.hasProperty('BUILD_TIME')) {
+        createTime = BUILD_TIME
+    }
+
+    def isUseJenkins = false
+    if (rootProject.hasProperty('JENKINS')) {
+        isUseJenkins = true
+    }
+
+    if (buildType == "release" || isUseJenkins) {
+        variant.getPackageApplication().outputDirectory = new File(project.rootDir.absolutePath + "/apks" + (productName != null ? "/${productName}" : ""))
+    }
+
+    variant.outputs.each {
+        if (buildType == "release" || isUseJenkins) {
+            fileName = "${projectName}_${productVersionName}_${createTime}-${buildType}.apk"
+            it.outputFileName = fileName
+            if (variant.getBuildType().isMinifyEnabled()) {
+                variant.assemble.doLast {
+                    copy {
+                        from variant.mappingFile
+                        println variant.mappingFile.path
+                        into "${project.rootDir.absolutePath}/apks"
+                        rename { String name ->
+                            "mapping/${projectName}_${productVersionName}_${createTime}-${buildType}.txt"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+ext {
+    generateDependonCfg = this.&generateDependonCfg
+    getChannel = this.&getChannel
+    getFramework = this.&getFramework
+    getCurrentCommitId = this.&getCurrentCommitId
+    setApkPathAndName = this.&setApkPathAndName
+}

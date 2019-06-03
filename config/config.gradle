@@ -1,0 +1,92 @@
+ext {
+
+    //android特性配置
+    android = [
+            //记得修改为自己应用的包名
+            applicationId    : 'cn.yunovo.nxos.testcrash2',//"cn.yunovo.nxos.traffic",
+            compileSdkVersion: 27,
+            buildToolsVersion: "26.0.2",
+            //sdk版本
+            minSdkVersion    : 21,
+            targetSdkVersion : 27
+    ]
+
+    //签名信息
+    signature = [
+            storeFile    : '../config/keystore/mtk6735/debug.keystore',
+            keyAlias     : 'androiddebugkey',
+            keyPassword  : 'android',
+            storePassword: 'android',
+    ]
+
+    //主app版本号，逻辑层版本号
+    //如果带渠道版本号，以渠道版本号的versionCode为主
+    //不带渠道版本号，则以主app版本号为主
+    main_version = [
+            versionCode: 1,
+            versionName: '1.0.0'
+    ]
+
+    // 渠道版本号，不同的渠道自己演进
+    product_version = [
+//            mk21: [
+//                    version: 1,
+//            ],
+//            cm01: [
+//                    version: 1,
+//            ],
+//            ms16: [
+//                    version: 1,
+//            ]
+    ]
+
+    //定义BuildConfig常量
+    buildType = [
+            //这个保留
+            release: [
+                    //如果不需要，可以把下面的reject_network去掉
+                    //reject_network: [
+                    //        type : "boolean",
+                    //        name : "USE_REJECT_NETWORK",
+                    //        value: "true"
+                    //]
+            ],
+            //这个保留
+            debug  : [
+                    //如果不需要，可以把下面的reject_network去掉
+                    //reject_network: [
+                    //        type : "boolean",
+                    //        name : "USE_REJECT_NETWORK",
+                    //        value: "false"
+                    //]
+            ]
+    ]
+
+    //SDK版本号,以s开头，后面跟数字，每次升级加一；如果没有对外提供SDK，可以没有version
+    sdk_version = [
+            version: 's1'
+    ]
+
+    //只放有依赖关系的sdk,写全路径,命名要符合依赖sdk命名规则，见：NXOS 应用依赖关系管理方案 http://wiki.yunovo.cn/x/dhTX
+    nxos_dependon_libs = [
+            compileOnly   : [
+                    files: [
+                            '../libs/framework.jar'
+                    ],
+                    maven: [
+                    ]
+            ],
+            implementation: [
+                    files: [
+                            //文件写法
+                            //'../libs/nxSettingsProvider_cn.yunovo.config_s1.jar'
+                            '../libs/nxCarService_cn.yunovo.nxos.carservice_s1.jar',
+                            '../libs/yunovo_sdk.jar'
+                    ],
+                    maven: [
+                            //maven写法
+                            //'cn.yunovo.nxos.traffic:nxTraffic:s1'
+                    ]
+            ]
+    ]
+}

@@ -1,0 +1,119 @@
+apply plugin: 'com.android.application'
+apply plugin: 'bugly'
+
+def rootAndroid = rootProject.ext.android
+
+def signature = rootProject.ext.signature
+
+def appVersion = rootProject.ext.main_version
+
+def productVersion = rootProject.ext.product_version
+
+def buildTypeDef = rootProject.ext.buildType
+
+def sdkVersion = rootProject.ext.sdk_version
+
+def nxosLib = rootProject.ext.nxos_dependon_libs
+
+bugly {
+    appId = '55e310b91f' // 注册时分配的App ID
+    appKey = '0d1b2fd5-0f7e-464d-8ce0-b23a5a1779e7' // 注册时分配的App Key
+}
+
+android {
+    compileSdkVersion rootAndroid.compileSdkVersion
+    buildToolsVersion rootAndroid.buildToolsVersion
+    defaultConfig {
+        applicationId rootAndroid.applicationId
+        minSdkVersion rootAndroid.minSdkVersion
+        targetSdkVersion rootAndroid.targetSdkVersion
+        versionCode appVersion.versionCode
+        //如果没有多渠道，versionName后面请添加上(sdkVersion.size() > 0 ? ('_' + sdkVersion.version) : '')，有疑问找时汉文
+        if (sdkVersion.size() > 0 && productVersion.size() == 0) {
+            def commitId = getCurrentCommitId()
+            versionName appVersion.versionName + (sdkVersion.size() > 0 ? ('_' + sdkVersion.version) : '') + (commitId != null ? ('_' + commitId) : '')
+        } else {
+            versionName appVersion.versionName
+        }
+        if (productVersion.size() > 0){
+            flavorDimensions "default"
+        }
+        //生成依赖配置文件
+        generateDependonCfg(nxosLib)
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        multiDexEnabled true
+    }
+    signingConfigs {
+        debug {
+            storeFile file(signature.storeFile)
+            keyAlias signature.keyAlias
+            keyPassword signature.keyPassword
+            storePassword signature.storePassword
+        }
+        release {
+            storeFile file(signature.storeFile)
+            keyAlias signature.keyAlias
+            keyPassword signature.keyPassword
+            storePassword signature.storePassword
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            buildTypeDef.release.each {
+                entry ->
+                buildConfigField entry.value.type, entry.value.name, entry.value.value
+            }
+
+        }
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
+            buildTypeDef.debug.each {
+                entry->
+                buildConfigField entry.value.type, entry.value.name, entry.value.value
+            }
+        }
+    }
+
+    //配置apk输出路径及apk名称
+    applicationVariants.all {
+        setApkPathAndName (it, defaultConfig.versionName)
+    }
+    repositories {
+        flatDir {
+            dirs '../libs/'
+        }
+    }
+}
+
+dependencies {
+    //云智sdk
+    compile 'com.tencent.bugly:crashreport:latest.release'
+    //其中latest.release指代最新Bugly SDK版本号，也可以指定明确的版本号，例如2.2.0
+    //    compile 'com.tencent.bugly:nativecrashreport:latest.release'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    nxosLib.compileOnly.files.each {
+        compileOnly files(it)
+    }
+    nxosLib.compileOnly.maven.each {
+        compileOnly it
+    }
+    nxosLib.implementation.files.each {
+        implementation files(it)
+    }
+    nxosLib.implementation.maven.each {
+        implementation it
+    }
+    implementation project(':TestSDK')
+}
+
+
+
+
